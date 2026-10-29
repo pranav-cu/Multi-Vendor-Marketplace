@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import type { CatalogProduct } from '../types/customer';
 import { getCatalogProducts, CustomerApiError } from '../services/customerApi';
+import { resolveProductImageUrl } from '../services/productApi';
 import { useCustomer } from '../context/useCustomer';
 import { ProductDetailModal } from '../components/ProductDetailModal';
 import {
@@ -258,14 +259,27 @@ export const CatalogView: React.FC<CatalogViewProps> = ({
                 onClick={() => setSelectedProductId(product.productId)}
                 className="group flex flex-col justify-between bg-white border border-neutral-200/90 transition-all duration-200 hover:shadow-[0_8px_30px_rgba(0,0,0,0.06)] cursor-pointer"
               >
-                {/* Image Container with Neutral Luxury Architectural Fallback */}
-                <div className="relative aspect-[4/3] bg-[#ece9e2] overflow-hidden flex flex-col items-center justify-center p-6 text-center">
-                  <div className="w-12 h-12 border border-neutral-300 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
-                    <AtelierLogoGlyph className="w-6 h-6 text-neutral-600" />
-                  </div>
-                  <span className="text-[9px] font-bold tracking-[0.24em] uppercase text-neutral-500">
-                    SPECIMEN ARCHIVE
-                  </span>
+                {/* Image Container with Luxury Specimen Display */}
+                <div className="relative aspect-[4/3] bg-[#ece9e2] overflow-hidden flex flex-col items-center justify-center text-center">
+                  {product.images && product.images.length > 0 ? (
+                    <img
+                      src={resolveProductImageUrl(product.images[0])}
+                      alt={product.title}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      onError={(e) => {
+                        (e.target as HTMLElement).style.display = 'none';
+                      }}
+                    />
+                  ) : (
+                    <div className="flex flex-col items-center justify-center p-6 text-center">
+                      <div className="w-12 h-12 border border-neutral-300 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+                        <AtelierLogoGlyph className="w-6 h-6 text-neutral-600" />
+                      </div>
+                      <span className="text-[9px] font-bold tracking-[0.24em] uppercase text-neutral-500">
+                        SPECIMEN ARCHIVE
+                      </span>
+                    </div>
+                  )}
 
                   {/* Top Badges */}
                   <div className="absolute top-3 left-3 right-3 flex items-center justify-between">

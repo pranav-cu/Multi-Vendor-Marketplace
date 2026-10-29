@@ -1,19 +1,22 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import {
   createProduct,
   deleteProduct,
   getMyProducts,
   updateProduct,
+  uploadProductImages,
+  resolveProductImageUrl,
   type ProductInput,
   type VendorProduct,
 } from '../services/productApi';
-import { EditIcon, PlusIcon, SpinnerIcon, TrashIcon, XIcon } from './ui/Icons';
+import { EditIcon, PlusIcon, SpinnerIcon, TrashIcon, XIcon, UploadIcon } from './ui/Icons';
 
 type ProductFormState = {
   title: string;
   description: string;
   price: string;
   stockQuantity: string;
+  images: string[];
 };
 
 const emptyForm: ProductFormState = {
@@ -21,6 +24,7 @@ const emptyForm: ProductFormState = {
   description: '',
   price: '',
   stockQuantity: '',
+  images: [],
 };
 
 const toFormState = (product?: VendorProduct): ProductFormState => ({
@@ -28,6 +32,7 @@ const toFormState = (product?: VendorProduct): ProductFormState => ({
   description: product?.description || '',
   price: product ? String(product.price) : '',
   stockQuantity: product ? String(product.stockQuantity) : '',
+  images: product?.images ? [...product.images] : [],
 });
 
 const validateForm = (form: ProductFormState): string | null => {
@@ -52,6 +57,7 @@ const toProductInput = (form: ProductFormState): ProductInput => ({
   description: form.description.trim(),
   price: Number(form.price),
   stockQuantity: Number(form.stockQuantity),
+  images: form.images,
 });
 
 export default function VendorProductManagement() {
@@ -64,6 +70,38 @@ export default function VendorProductManagement() {
   const [form, setForm] = useState<ProductFormState>(emptyForm);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [imageUploadError, setImageUploadError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const handleImageFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    setIsUploadingImage(true);
+    setImageUploadError(null);
+
+    try {
+      const fileList = Array.from(files);
+      const uploadedUrls = await uploadProductImages(fileList);
+      setForm((prev) => ({
+        ...prev,
+        images: [...prev.images, ...uploadedUrls],
+      }));
+    } catch (err) {
+      setImageUploadError(err instanceof Error ? err.message : 'Failed to upload image(s).');
+    } finally {
+      setIsUploadingImage(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleRemoveImage = (indexToRemove: number) => {
+    setForm((prev) => ({
+      ...prev,
+      images: prev.images.filter((_, idx) => idx !== indexToRemove),
+    }));
+  };
 
   const loadProducts = useCallback(async () => {
     setIsLoading(true);
@@ -91,6 +129,7 @@ export default function VendorProductManagement() {
     setForm(emptyForm);
     setErrorMessage(null);
     setSuccessMessage(null);
+    setImageUploadError(null);
     setIsFormOpen(true);
   };
 
@@ -99,6 +138,7 @@ export default function VendorProductManagement() {
     setForm(toFormState(product));
     setErrorMessage(null);
     setSuccessMessage(null);
+    setImageUploadError(null);
     setIsFormOpen(true);
   };
 
@@ -225,8 +265,28 @@ export default function VendorProductManagement() {
               {products.map((product) => (
                 <tr key={product.productId} className="hover:bg-neutral-50/70">
                   <td className="max-w-xs px-4 py-4">
-                    <p className="font-semibold text-neutral-900">{product.title}</p>
-                    <p className="mt-1 line-clamp-2 text-[11px] text-neutral-500">{product.description}</p>
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 shrink-0 border border-neutral-200 bg-[#f4f2ee] overflow-hidden flex items-center justify-center">
+                        {product.images && product.images.length > 0 ? (
+                          <img
+                            src={resolveProductImageUrl(product.images[0])}
+                            alt={product.title}
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              (e.target as HTMLElement).style.display = 'none';
+                            }}
+                          />
+                        ) : (
+                          <span className="text-[9px] text-neutral-400 font-bold uppercase tracking-widest">
+                            No Img
+                          </span>
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-semibold text-neutral-900 truncate">{product.title}</p>
+                        <p className="mt-0.5 line-clamp-2 text-[11px] text-neutral-500">{product.description}</p>
+                      </div>
+                    </div>
                   </td>
                   <td className="px-4 py-4 text-neutral-600">
                     <p>{product.storeName}</p>
@@ -281,6 +341,65 @@ export default function VendorProductManagement() {
                   <input type="number" min="0" step="1" value={form.stockQuantity} onChange={(event) => setForm({ ...form, stockQuantity: event.target.value })} className="w-full border border-neutral-300 bg-[#f6f6f4] px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-neutral-900" />
                 </label>
               </div>
+
+              {/* Product Images Local / MongoDB Uploader */}
+              <div className="space-y-2 pt-2 border-t border-neutral-200">
+                <div className="flex items-center justify-between">
+                  <span className="block text-[10px] font-semibold uppercase tracking-wider text-neutral-700">
+                    Product Images ({form.images.length})
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isUploadingImage || isSubmitting}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-neutral-100 hover:bg-neutral-200 text-neutral-800 text-[10px] font-semibold uppercase tracking-wider border border-neutral-300 transition-colors cursor-pointer disabled:opacity-50"
+                  >
+                    {isUploadingImage ? <SpinnerIcon className="w-3 h-3 animate-spin" /> : <UploadIcon className="w-3 h-3" />}
+                    <span>{isUploadingImage ? 'Uploading...' : 'Upload Image(s)'}</span>
+                  </button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    accept="image/png,image/jpeg,image/webp,image/gif,image/avif"
+                    onChange={handleImageFileChange}
+                    className="hidden"
+                  />
+                </div>
+
+                {imageUploadError && (
+                  <p className="text-[11px] text-red-600 bg-red-50 p-2 border border-red-200">
+                    {imageUploadError}
+                  </p>
+                )}
+
+                {form.images.length > 0 ? (
+                  <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 pt-1">
+                    {form.images.map((imgUrl, idx) => (
+                      <div key={idx} className="relative aspect-square border border-neutral-300 bg-neutral-100 group overflow-hidden">
+                        <img
+                          src={resolveProductImageUrl(imgUrl)}
+                          alt={`Product view ${idx + 1}`}
+                          className="w-full h-full object-cover"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveImage(idx)}
+                          className="absolute top-1 right-1 bg-black/80 hover:bg-black text-white p-0.5 rounded-full opacity-80 group-hover:opacity-100 transition-opacity cursor-pointer"
+                          title="Remove image"
+                        >
+                          <XIcon className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-neutral-400 font-light italic">
+                    No images uploaded yet. Upload images to store locally and associate with this catalog specimen.
+                  </p>
+                )}
+              </div>
+
               <div className="flex justify-end gap-3 pt-2">
                 <button type="button" onClick={closeForm} disabled={isSubmitting} className="border border-neutral-300 px-4 py-2 text-[10px] font-semibold uppercase tracking-wider disabled:opacity-50">
                   Cancel

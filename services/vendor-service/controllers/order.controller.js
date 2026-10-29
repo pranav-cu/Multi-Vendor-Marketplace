@@ -2,7 +2,9 @@ import {
     createOrder,
     listOrders,
     getOrder,
-    cancelOrder
+    cancelOrder,
+    listVendorOrders,
+    updateVendorOrderStatus
 } from "../services/order.service.js";
 import { parsePagination } from "../utils/catalog.validation.js";
 import { addressSnapshot, validateDeliveryAddress, validateOrderId } from "../utils/order.validation.js";
@@ -83,9 +85,54 @@ export const cancelOrderController = async (req, res) => {
     }
 };
 
+export const getVendorOrdersController = async (req, res) => {
+    try {
+        const vendorUserId = req.user?.userId;
+        if (!vendorUserId) {
+            return res.status(401).json({ message: "Vendor authentication required" });
+        }
+        const orders = await listVendorOrders(vendorUserId);
+        return res.status(200).json({
+            message: "Vendor sub-orders fetched successfully",
+            data: orders
+        });
+    } catch (error) {
+        console.error("Error in getVendorOrdersController:", error);
+        return res.status(error.statusCode || 500).json({
+            message: error.message || "Unable to fetch vendor orders"
+        });
+    }
+};
+
+export const updateVendorOrderStatusController = async (req, res) => {
+    try {
+        const vendorUserId = req.user?.userId;
+        if (!vendorUserId) {
+            return res.status(401).json({ message: "Vendor authentication required" });
+        }
+        const { orderId } = req.params;
+        const { status } = req.body || {};
+        if (!status) {
+            return res.status(400).json({ message: "status is required" });
+        }
+        const updated = await updateVendorOrderStatus(vendorUserId, orderId, status);
+        return res.status(200).json({
+            message: "Sub-order status updated successfully",
+            data: updated
+        });
+    } catch (error) {
+        console.error("Error in updateVendorOrderStatusController:", error);
+        return res.status(error.statusCode || 500).json({
+            message: error.message || "Unable to update sub-order status"
+        });
+    }
+};
+
 export default {
     createOrderController,
     listOrdersController,
     getOrderController,
-    cancelOrderController
+    cancelOrderController,
+    getVendorOrdersController,
+    updateVendorOrderStatusController
 };

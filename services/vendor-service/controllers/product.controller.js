@@ -9,7 +9,8 @@ const editableProductFields = new Set([
     "title",
     "description",
     "price",
-    "stockQuantity"
+    "stockQuantity",
+    "images"
 ]);
 
 const updateProductController = async (req, res) => {
@@ -64,6 +65,16 @@ const updateProductController = async (req, res) => {
                 });
             }
             updateData.stockQuantity = body.stockQuantity;
+        }
+
+        if (Object.prototype.hasOwnProperty.call(body, "images")) {
+            if (!Array.isArray(body.images)) {
+                return res.status(400).json({ message: "images must be an array of image URL/path strings" });
+            }
+            if (body.images.some((img) => typeof img !== "string" || !img.trim())) {
+                return res.status(400).json({ message: "Each product image must be a non-empty string" });
+            }
+            updateData.images = body.images.map((img) => img.trim());
         }
 
         const userId = req.user?.userId;
@@ -149,11 +160,23 @@ const createProductController = async (req, res) => {
             return res.status(400).json({ message: "stockQuantity must be a non-negative integer" });
         }
 
+        let productImages = [];
+        if (Object.prototype.hasOwnProperty.call(req.body, "images")) {
+            if (!Array.isArray(req.body.images)) {
+                return res.status(400).json({ message: "images must be an array of image URL/path strings" });
+            }
+            if (req.body.images.some((img) => typeof img !== "string" || !img.trim())) {
+                return res.status(400).json({ message: "Each product image must be a non-empty string" });
+            }
+            productImages = req.body.images.map((img) => img.trim());
+        }
+
         const product = await createProduct(req.user.userId, {
             title: title.trim(),
             description: description.trim(),
             price,
-            stockQuantity
+            stockQuantity,
+            images: productImages
         });
 
         return res.status(201).json({
@@ -168,15 +191,43 @@ const createProductController = async (req, res) => {
     }
 };
 
+const uploadProductImagesController = async (req, res) => {
+    try {
+        const files = req.files && req.files.length > 0
+            ? req.files
+            : req.file ? [req.file] : [];
+
+        if (files.length === 0) {
+            return res.status(400).json({ message: "No image file was uploaded" });
+        }
+
+        const uploadedUrls = files.map((f) => `/uploads/products/${f.filename}`);
+
+        return res.status(200).json({
+            message: "Product image(s) uploaded successfully",
+            data: {
+                images: uploadedUrls
+            }
+        });
+    } catch (error) {
+        console.error("Error in uploadProductImagesController:", error);
+        return res.status(500).json({
+            message: error.message || "Failed to upload product images"
+        });
+    }
+};
+
 export {
     getMyProductsController,
     createProductController,
     updateProductController,
-    deleteProductController
+    deleteProductController,
+    uploadProductImagesController
 };
 export default {
     getMyProductsController,
     createProductController,
     updateProductController,
-    deleteProductController
+    deleteProductController,
+    uploadProductImagesController
 };

@@ -511,3 +511,295 @@ test('7. Customer Profile & Address Book Contract', async (t) => {
     }
   });
 });
+
+test('8. Role-Based Access Control & Privilege Enforcement', async (t) => {
+  const {
+    validateUserToken,
+    isAdminToken,
+    isVendorToken,
+  } = await import('../src/utils/customerAuthUtils.ts');
+  const { getPendingVendors } = await import('../src/services/adminApi.ts');
+
+  const adminToken = createSyntheticJwt({
+    userId: 9001,
+    email: 'curator@atelier.com',
+    role: 'admin',
+    exp: Math.floor(Date.now() / 1000) + 3600,
+  });
+
+  const vendorToken = createSyntheticJwt({
+    userId: 1001,
+    email: 'atelier@minimaliste.fr',
+    role: 'vendor',
+    exp: Math.floor(Date.now() / 1000) + 3600,
+  });
+
+  const customerToken = createSyntheticJwt({
+    userId: 4001,
+    email: 'client@atelier.com',
+    role: 'customer',
+    exp: Math.floor(Date.now() / 1000) + 3600,
+  });
+
+  await t.test('token validation identifies roles precisely', () => {
+    assert.equal(isAdminToken(adminToken), true);
+    assert.equal(isAdminToken(vendorToken), false);
+    assert.equal(isAdminToken(customerToken), false);
+
+    assert.equal(isVendorToken(vendorToken), true);
+    assert.equal(isVendorToken(adminToken), false);
+    assert.equal(isVendorToken(customerToken), false);
+
+    assert.equal(validateUserToken(adminToken)?.role, 'admin');
+    assert.equal(validateUserToken(vendorToken)?.role, 'vendor');
+    assert.equal(validateUserToken(customerToken)?.role, 'customer');
+  });
+
+  await t.test('adminApi throws error when no token is present', async () => {
+    storage.delete('vendor_token');
+    await assert.rejects(
+      () => getPendingVendors(),
+      /Please sign in with an administrator account/
+    );
+  });
+
+  await t.test('adminApi rejects vendor or customer tokens with access denied', async () => {
+    storage.set('vendor_token', vendorToken);
+    await assert.rejects(
+      () => getPendingVendors(),
+      /Access denied: Administrator privileges required/
+    );
+
+    storage.set('vendor_token', customerToken);
+    await assert.rejects(
+      () => getPendingVendors(),
+      /Access denied: Administrator privileges required/
+    );
+  });
+
+  await t.test('adminApi sends request and unwraps response when admin token is provided', async () => {
+    storage.set('vendor_token', adminToken);
+    let authHeader = '';
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (url, init) => {
+      authHeader = init.headers?.Authorization || '';
+      return new Response(
+        JSON.stringify({
+          message: 'Pending vendors',
+          data: [{ userId: 1003, storeName: 'Mercer Bronze', status: 'pending' }],
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      );
+    };
+
+    try {
+      const pending = await getPendingVendors();
+      assert.equal(authHeader, `Bearer ${adminToken}`);
+      assert.equal(pending.length, 1);
+      assert.equal(pending[0].storeName, 'Mercer Bronze');
+    } finally {
+      globalThis.fetch = originalFetch;
+      storage.delete('vendor_token');
+    }
+  });
+});
+
+test('9. Product Image Upload & Resolution Contract', async (t) => {
+  const { uploadProductImages, resolveProductImageUrl } = await import(
+    '../src/services/productApi.ts'
+  );
+
+  await t.test('resolveProductImageUrl preserves external and data URLs', () => {
+    assert.equal(
+      resolveProductImageUrl('https://images.unsplash.com/photo-1'),
+      'https://images.unsplash.com/photo-1'
+    );
+    assert.equal(
+      resolveProductImageUrl('data:image/png;base64,abc123'),
+      'data:image/png;base64,abc123'
+    );
+    assert.equal(resolveProductImageUrl(''), '');
+  });
+
+  await t.test('resolveProductImageUrl resolves local /uploads paths', () => {
+    const resolved = resolveProductImageUrl('/uploads/products/lamp.jpg');
+    assert.ok(resolved.endsWith('/uploads/products/lamp.jpg'));
+    assert.ok(resolved.startsWith('http'));
+  });
+
+  await t.test('uploadProductImages throws when not authenticated', async () => {
+    storage.delete('vendor_token');
+    await assert.rejects(
+      () => uploadProductImages([]),
+      /Please sign in before uploading images/
+    );
+  });
+
+  await t.test('uploadProductImages sends files and returns uploaded paths', async () => {
+    storage.set('vendor_token', 'valid-vendor-token');
+    let requestMethod = '';
+    let hasAuth = false;
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (url, init) => {
+      requestMethod = init.method;
+      hasAuth = init.headers?.Authorization === 'Bearer valid-vendor-token';
+      return new Response(
+        JSON.stringify({
+          message: 'Product image(s) uploaded successfully',
+          data: {
+            images: ['/uploads/products/prod-vase-123.jpg'],
+          },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      );
+    };
+
+    try {
+      // Mock File object
+      const dummyFile = { name: 'vase.jpg', type: 'image/jpeg' };
+      const urls = await uploadProductImages([dummyFile]);
+      assert.equal(requestMethod, 'POST');
+      assert.equal(hasAuth, true);
+      assert.deepEqual(urls, ['/uploads/products/prod-vase-123.jpg']);
+    } finally {
+      globalThis.fetch = originalFetch;
+      storage.delete('vendor_token');
+    }
+  });
+});
+
+test('10. Vendor API Client & Dashboard Integration', async (t) => {
+  const {
+    getVendorProfile,
+    getVendorOrders,
+    updateVendorOrderStatus,
+  } = await import('../src/services/vendorApi.ts');
+
+  await t.test('getVendorProfile throws error when vendor token is missing', async () => {
+    storage.delete('vendor_token');
+    await assert.rejects(
+      () => getVendorProfile(),
+      /Please sign in with a vendor account/
+    );
+  });
+
+  await t.test('getVendorProfile sends request with vendor token and unwraps profile', async () => {
+    storage.set('vendor_token', 'mock-vendor-token');
+    const originalFetch = globalThis.fetch;
+    let requestedUrl = '';
+    let authHeader = '';
+
+    globalThis.fetch = async (url, init) => {
+      requestedUrl = String(url);
+      authHeader = init?.headers?.Authorization || '';
+      return new Response(
+        JSON.stringify({
+          message: 'Profile retrieved',
+          data: {
+            userId: 1001,
+            email: 'artisan@atelier.com',
+            storeName: 'Atelier Ceramics',
+            slug: 'atelier-ceramics',
+            status: 'approved',
+            commissionPct: 12,
+            payoutAccountId: 'acct_1001',
+          },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      );
+    };
+
+    try {
+      const profile = await getVendorProfile();
+      assert.ok(requestedUrl.includes('/vendor-data/profile'));
+      assert.equal(authHeader, 'Bearer mock-vendor-token');
+      assert.equal(profile.userId, 1001);
+      assert.equal(profile.storeName, 'Atelier Ceramics');
+      assert.equal(profile.commissionPct, 12);
+    } finally {
+      globalThis.fetch = originalFetch;
+      storage.delete('vendor_token');
+    }
+  });
+
+  await t.test('getVendorOrders retrieves vendor sub-orders', async () => {
+    storage.set('vendor_token', 'mock-vendor-token');
+    const originalFetch = globalThis.fetch;
+    let requestedUrl = '';
+
+    globalThis.fetch = async (url) => {
+      requestedUrl = String(url);
+      return new Response(
+        JSON.stringify({
+          message: 'Vendor orders fetched',
+          data: [
+            {
+              orderId: 'ORD-123',
+              customerUserId: 4001,
+              status: 'pending',
+              paymentStatus: 'paid',
+              subtotal: 120,
+              items: [
+                {
+                  productId: 'prod-1',
+                  title: 'Clay Mug',
+                  storeName: 'Atelier Ceramics',
+                  unitPrice: 60,
+                  quantity: 2,
+                  lineTotal: 120,
+                },
+              ],
+            },
+          ],
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      );
+    };
+
+    try {
+      const orders = await getVendorOrders();
+      assert.ok(requestedUrl.includes('/vendor-data/orders'));
+      assert.equal(orders.length, 1);
+      assert.equal(orders[0].orderId, 'ORD-123');
+      assert.equal(orders[0].subtotal, 120);
+      assert.equal(orders[0].items[0].quantity, 2);
+    } finally {
+      globalThis.fetch = originalFetch;
+      storage.delete('vendor_token');
+    }
+  });
+
+  await t.test('updateVendorOrderStatus sends PATCH to update order fulfillment status', async () => {
+    storage.set('vendor_token', 'mock-vendor-token');
+    const originalFetch = globalThis.fetch;
+    let requestedUrl = '';
+    let method = '';
+    let body = '';
+
+    globalThis.fetch = async (url, init) => {
+      requestedUrl = String(url);
+      method = init?.method || '';
+      body = String(init?.body || '');
+      return new Response(
+        JSON.stringify({
+          message: 'Order status updated',
+          data: { orderId: 'ORD-123', status: 'processing' },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      );
+    };
+
+    try {
+      await updateVendorOrderStatus('ORD-123', 'processing');
+      assert.ok(requestedUrl.includes('/vendor-data/orders/ORD-123/status'));
+      assert.equal(method, 'PATCH');
+      assert.deepEqual(JSON.parse(body), { status: 'processing' });
+    } finally {
+      globalThis.fetch = originalFetch;
+      storage.delete('vendor_token');
+    }
+  });
+});
+
+
+

@@ -26,6 +26,7 @@ export interface CatalogProduct {
   description: string;
   price: number;
   stockQuantity: number;
+  images?: string[];
   createdAt: string;
   updatedAt: string;
   vendorId: number;

@@ -29,7 +29,7 @@ export interface NavbarProps {
 }
 
 export const Navbar: React.FC<NavbarProps> = ({ currentView = 'catalog', onNavigate }) => {
-  const { currentUserEmail } = useMarketplace();
+  const { currentUserEmail, isAdmin, isVendor } = useMarketplace();
   const { isCustomerAuthenticated, customerUser, customerProfile, cartCount: customerCartCount } = useCustomer();
 
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -102,41 +102,45 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView = 'catalog', onNavig
                 </button>
               )}
 
-              <button
-                type="button"
-                onClick={() => onNavigate('vendor')}
-                className={`relative py-2 transition-colors duration-150 cursor-pointer ${
-                  currentView === 'vendor'
-                    ? 'text-neutral-900'
-                    : 'text-neutral-500 hover:text-neutral-900'
-                }`}
-              >
-                <span>VENDOR HUB</span>
-                {currentView === 'vendor' && (
-                  <span
-                    className="absolute bottom-0 left-0 w-full h-[2px] bg-neutral-900"
-                    aria-hidden="true"
-                  />
-                )}
-              </button>
+              {!isCustomerAuthenticated && (isVendor || isAdmin) && (
+                <button
+                  type="button"
+                  onClick={() => onNavigate('vendor')}
+                  className={`relative py-2 transition-colors duration-150 cursor-pointer ${
+                    currentView === 'vendor'
+                      ? 'text-neutral-900'
+                      : 'text-neutral-500 hover:text-neutral-900'
+                  }`}
+                >
+                  <span>VENDOR HUB</span>
+                  {currentView === 'vendor' && (
+                    <span
+                      className="absolute bottom-0 left-0 w-full h-[2px] bg-neutral-900"
+                      aria-hidden="true"
+                    />
+                  )}
+                </button>
+              )}
 
-              <button
-                type="button"
-                onClick={() => onNavigate('admin')}
-                className={`relative py-2 transition-colors duration-150 cursor-pointer ${
-                  currentView === 'admin'
-                    ? 'text-neutral-900'
-                    : 'text-neutral-500 hover:text-neutral-900'
-                }`}
-              >
-                <span>ADMIN CONSOLE</span>
-                {currentView === 'admin' && (
-                  <span
-                    className="absolute bottom-0 left-0 w-full h-[2px] bg-neutral-900"
-                    aria-hidden="true"
-                  />
-                )}
-              </button>
+              {isAdmin && (
+                <button
+                  type="button"
+                  onClick={() => onNavigate('admin')}
+                  className={`relative py-2 transition-colors duration-150 cursor-pointer ${
+                    currentView === 'admin'
+                      ? 'text-neutral-900'
+                      : 'text-neutral-500 hover:text-neutral-900'
+                  }`}
+                >
+                  <span>ADMIN CONSOLE</span>
+                  {currentView === 'admin' && (
+                    <span
+                      className="absolute bottom-0 left-0 w-full h-[2px] bg-neutral-900"
+                      aria-hidden="true"
+                    />
+                  )}
+                </button>
+              )}
             </nav>
           </div>
 
@@ -298,26 +302,30 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView = 'catalog', onNavig
                 MY ORDERS
               </button>
             )}
-            <button
-              type="button"
-              onClick={() => {
-                onNavigate('vendor');
-                setIsMobileMenuOpen(false);
-              }}
-              className="text-left py-2 px-2 text-neutral-800 hover:bg-neutral-50"
-            >
-              VENDOR HUB
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                onNavigate('admin');
-                setIsMobileMenuOpen(false);
-              }}
-              className="text-left py-2 px-2 text-neutral-800 hover:bg-neutral-50"
-            >
-              ADMIN CONSOLE
-            </button>
+            {!isCustomerAuthenticated && (isVendor || isAdmin) && (
+              <button
+                type="button"
+                onClick={() => {
+                  onNavigate('vendor');
+                  setIsMobileMenuOpen(false);
+                }}
+                className="text-left py-2 px-2 text-neutral-800 hover:bg-neutral-50"
+              >
+                VENDOR HUB
+              </button>
+            )}
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={() => {
+                  onNavigate('admin');
+                  setIsMobileMenuOpen(false);
+                }}
+                className="text-left py-2 px-2 text-neutral-800 hover:bg-neutral-50"
+              >
+                ADMIN CONSOLE
+              </button>
+            )}
             <button
               type="button"
               onClick={() => {

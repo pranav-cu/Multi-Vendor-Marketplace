@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { validateUserToken } from '../utils/customerAuthUtils.ts';
 import type {
   Vendor,
   Product,
@@ -254,6 +255,9 @@ interface MarketplaceContextType {
 
   // User Authentication & Session
   currentUserEmail: string | null;
+  currentUserRole: 'admin' | 'vendor' | null;
+  isAdmin: boolean;
+  isVendor: boolean;
   isAuthenticated: boolean;
   loginUser: (email: string, token?: string) => void;
   logoutUser: () => void;
@@ -318,24 +322,47 @@ export const MarketplaceProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const [currentIdempotencyKey, setCurrentIdempotencyKey] = useState<string | null>(null);
   const [isSettling, setIsSettling] = useState(false);
 
-  // User Session & Email state
+  // User Session, Email & Role state
   const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(() => {
     return localStorage.getItem('vendor_email') || null;
   });
 
-  const isAuthenticated = Boolean(currentUserEmail || (typeof window !== 'undefined' && localStorage.getItem('vendor_token')));
+  const [currentUserRole, setCurrentUserRole] = useState<'admin' | 'vendor' | null>(() => {
+    if (typeof window === 'undefined') return null;
+    const token = localStorage.getItem('vendor_token');
+    const validated = validateUserToken(token);
+    if (validated && (validated.role === 'admin' || validated.role === 'vendor')) {
+      return validated.role;
+    }
+    return null;
+  });
+
+  const isAdmin = currentUserRole === 'admin';
+  const isVendor = currentUserRole === 'vendor';
+
+  const isAuthenticated = Boolean(
+    currentUserEmail || (typeof window !== 'undefined' && localStorage.getItem('vendor_token'))
+  );
 
   const loginUser = (email: string, token?: string) => {
     const cleanEmail = email.trim().toLowerCase();
     setCurrentUserEmail(cleanEmail);
     localStorage.setItem('vendor_email', cleanEmail);
+    const targetToken = token || (typeof window !== 'undefined' ? localStorage.getItem('vendor_token') : null);
     if (token) {
       localStorage.setItem('vendor_token', token);
+    }
+    const validated = validateUserToken(targetToken);
+    if (validated && (validated.role === 'admin' || validated.role === 'vendor')) {
+      setCurrentUserRole(validated.role);
+    } else {
+      setCurrentUserRole(null);
     }
   };
 
   const logoutUser = () => {
     setCurrentUserEmail(null);
+    setCurrentUserRole(null);
     localStorage.removeItem('vendor_email');
     localStorage.removeItem('vendor_token');
   };
@@ -643,6 +670,9 @@ export const MarketplaceProvider: React.FC<{ children: React.ReactNode }> = ({ c
         updateVendorStatus,
         updateCommissionPct,
         currentUserEmail,
+        currentUserRole,
+        isAdmin,
+        isVendor,
         isAuthenticated,
         loginUser,
         logoutUser,

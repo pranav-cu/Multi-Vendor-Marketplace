@@ -4,21 +4,32 @@ import {
     updateVendorController,
     uploadKycController
 } from "../controllers/vendor-data.controller.js";
-import { authenticate, authorizeVendorOwnerOrAdmin } from "../middlewares/auth.js";
+import {
+    getVendorOrdersController,
+    updateVendorOrderStatusController
+} from "../controllers/order.controller.js";
+import { authenticate, authorizeRoles, authorizeVendorOwnerOrAdmin } from "../middlewares/auth.js";
 import { uploadKyc } from "../middlewares/upload.js";
 
 const router = Router();
 
+// Only vendors or admins can access or mutate vendor store data
+router.use(authenticate, authorizeRoles("vendor", "admin"));
+
 // Current vendor profile shortcuts
-router.get("/profile", authenticate, vendorDataController);
-router.put("/profile", authenticate, updateVendorController);
+router.get("/profile", vendorDataController);
+router.put("/profile", updateVendorController);
+
+// Vendor-specific distributed orders & fulfillment
+router.get("/orders", getVendorOrdersController);
+router.patch("/orders/:orderId/status", updateVendorOrderStatusController);
 
 // Upload KYC document(s) for the authenticated vendor
-router.post("/upload-kyc", authenticate, uploadKyc.any(), uploadKycController);
+router.post("/upload-kyc", uploadKyc.any(), uploadKycController);
 
-// Target specific userId: requires authentication, admin can access all, vendors access their own
-router.get("/:userId", authenticate, authorizeVendorOwnerOrAdmin, vendorDataController);
-router.put("/:userId", authenticate, authorizeVendorOwnerOrAdmin, updateVendorController);
+// Target specific userId: admin can access all, vendors access their own
+router.get("/:userId", authorizeVendorOwnerOrAdmin, vendorDataController);
+router.put("/:userId", authorizeVendorOwnerOrAdmin, updateVendorController);
 
 export { router as vendorDataRouter };
 export default router;

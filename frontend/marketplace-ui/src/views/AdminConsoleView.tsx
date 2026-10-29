@@ -22,8 +22,13 @@ import {
   CartesianGrid,
 } from 'recharts';
 
-export const AdminConsoleView: React.FC = () => {
+export interface AdminConsoleViewProps {
+  onNavigateToCatalog?: () => void;
+}
+
+export const AdminConsoleView: React.FC<AdminConsoleViewProps> = ({ onNavigateToCatalog }) => {
   const {
+    isAdmin,
     vendors,
     updateCommissionPct,
     orders,
@@ -42,6 +47,7 @@ export const AdminConsoleView: React.FC = () => {
   const [governanceAction, setGovernanceAction] = useState<number | null>(null);
 
   const loadPendingVendors = useCallback(async () => {
+    if (!isAdmin) return;
     setGovernanceLoading(true);
     setGovernanceError(null);
     try {
@@ -51,15 +57,43 @@ export const AdminConsoleView: React.FC = () => {
     } finally {
       setGovernanceLoading(false);
     }
-  }, []);
+  }, [isAdmin]);
 
   useEffect(() => {
+    if (!isAdmin) return;
     const timer = window.setTimeout(() => {
       void loadPendingVendors();
     }, 0);
 
     return () => window.clearTimeout(timer);
-  }, [loadPendingVendors]);
+  }, [isAdmin, loadPendingVendors]);
+
+  if (!isAdmin) {
+    return (
+      <div className="w-full max-w-4xl mx-auto my-12 px-4 sm:px-6">
+        <div className="bg-white border border-neutral-200 p-8 sm:p-12 text-center shadow-sm">
+          <div className="w-12 h-12 mx-auto mb-4 border border-neutral-300 bg-neutral-50 flex items-center justify-center text-neutral-800">
+            <ShieldLockIcon className="w-6 h-6" />
+          </div>
+          <h2 className="text-base sm:text-lg font-semibold tracking-wider uppercase text-neutral-900 mb-2">
+            Administrator Access Restricted
+          </h2>
+          <p className="text-xs sm:text-sm text-neutral-600 max-w-md mx-auto mb-6">
+            Access to platform governance, financial settlements, and vendor approvals requires an authenticated administrator session.
+          </p>
+          {onNavigateToCatalog && (
+            <button
+              type="button"
+              onClick={onNavigateToCatalog}
+              className="inline-flex items-center justify-center px-6 py-2.5 bg-neutral-900 text-white text-xs font-semibold tracking-widest uppercase hover:bg-neutral-800 transition-colors cursor-pointer"
+            >
+              Return to Catalog
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   const handleVendorDecision = async (vendor: Vendor, decision: 'approve' | 'reject') => {
     setGovernanceAction(vendor.userId);

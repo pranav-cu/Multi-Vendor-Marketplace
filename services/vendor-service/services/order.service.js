@@ -278,4 +278,69 @@ const cancelOrder = async (customerUserId, orderId) => {
     }
 };
 
-export { createOrder, listOrders, getOrder, cancelOrder, serializeOrder };
+const listVendorOrders = async (vendorUserId) => {
+    const orders = await Order.find({
+        "items.vendorId": Number(vendorUserId)
+    }).sort({ createdAt: -1, _id: -1 }).lean();
+
+    return orders.map((order) => {
+        const vendorItems = order.items.filter((item) => Number(item.vendorId) === Number(vendorUserId));
+        const subtotalMinor = vendorItems.reduce((sum, item) => sum + item.lineTotalMinor, 0);
+
+        return {
+            orderId: order.orderId,
+            customerUserId: order.customerUserId,
+            status: order.status,
+            paymentStatus: order.paymentStatus,
+            createdAt: order.createdAt,
+            updatedAt: order.updatedAt,
+            deliveryAddress: order.deliveryAddress,
+            subtotal: fromMinorUnits(subtotalMinor),
+            items: vendorItems.map((item) => ({
+                productId: item.productId.toString(),
+                title: item.title,
+                storeName: item.storeName,
+                unitPrice: fromMinorUnits(item.unitPriceMinor),
+                quantity: item.quantity,
+                lineTotal: fromMinorUnits(item.lineTotalMinor)
+            }))
+        };
+    });
+};
+
+const updateVendorOrderStatus = async (vendorUserId, orderId, newStatus) => {
+    validateOrderId(orderId);
+    const validStatuses = ["pending", "processing", "completed", "cancelled"];
+    if (!validStatuses.includes(newStatus)) {
+        const error = new Error(`Invalid status: ${newStatus}. Allowed: ${validStatuses.join(", ")}`);
+        error.statusCode = 400;
+        throw error;
+    }
+
+    const order = await Order.findOneAndUpdate(
+        {
+            orderId,
+            "items.vendorId": Number(vendorUserId)
+        },
+        { $set: { status: newStatus } },
+        { new: true }
+    ).lean();
+
+    if (!order) {
+        const error = new Error("Order not found or does not belong to this vendor");
+        error.statusCode = 404;
+        throw error;
+    }
+
+    return order;
+};
+
+export {
+    createOrder,
+    listOrders,
+    getOrder,
+    cancelOrder,
+    serializeOrder,
+    listVendorOrders,
+    updateVendorOrderStatus
+};

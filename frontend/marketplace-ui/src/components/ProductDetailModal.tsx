@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import type { CatalogProduct } from '../types/customer';
 import { getCatalogProduct, CustomerApiError } from '../services/customerApi';
+import { resolveProductImageUrl } from '../services/productApi';
 import { useCustomer } from '../context/useCustomer';
 import { XIcon, BagIcon, CheckIcon, SpinnerIcon, AtelierLogoGlyph } from './ui/Icons';
 
@@ -130,15 +131,25 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
           </div>
         ) : product ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 items-start">
-            {/* Neutral Editorial Visual Fallback */}
-            <div className="aspect-square bg-[#f2efe9] border border-neutral-200 flex flex-col items-center justify-center p-8 text-neutral-400 text-center relative">
-              <div className="w-16 h-16 border border-neutral-300 flex items-center justify-center mb-3">
-                <AtelierLogoGlyph className="w-8 h-8 text-neutral-600" />
-              </div>
-              <span className="text-[10px] tracking-[0.25em] uppercase text-neutral-500 font-semibold">
-                ARCHIVAL SPECIMEN
-              </span>
-              <span className="text-[9px] font-mono text-neutral-400 mt-1">ID: {product.productId}</span>
+            {/* Specimen Visual */}
+            <div className="aspect-square bg-[#f2efe9] border border-neutral-200 flex flex-col items-center justify-center text-neutral-400 text-center relative overflow-hidden">
+              {product.images && product.images.length > 0 ? (
+                <img
+                  src={resolveProductImageUrl(product.images[0])}
+                  alt={product.title}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <div className="flex flex-col items-center justify-center p-8">
+                  <div className="w-16 h-16 border border-neutral-300 flex items-center justify-center mb-3">
+                    <AtelierLogoGlyph className="w-8 h-8 text-neutral-600" />
+                  </div>
+                  <span className="text-[10px] tracking-[0.25em] uppercase text-neutral-500 font-semibold">
+                    ARCHIVAL SPECIMEN
+                  </span>
+                  <span className="text-[9px] font-mono text-neutral-400 mt-1">ID: {product.productId}</span>
+                </div>
+              )}
               {product.stockQuantity === 0 && (
                 <div className="absolute inset-0 bg-neutral-900/60 backdrop-blur-xs flex items-center justify-center">
                   <span className="text-xs font-bold tracking-widest uppercase text-white bg-black px-3 py-1 border border-neutral-600">

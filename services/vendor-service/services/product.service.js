@@ -21,6 +21,7 @@ const createProduct = async (userId, productData) => {
         description: productData.description,
         price: productData.price,
         stockQuantity: productData.stockQuantity,
+        images: productData.images || [],
         vendorId: vendor.userId
     });
 
@@ -62,6 +63,7 @@ const getMyProducts = async (userId) => {
         description: product.description,
         price: product.price,
         stockQuantity: product.stockQuantity,
+        images: product.images || [],
         createdAt: product.createdAt,
         updatedAt: product.updatedAt,
         vendorId: product.vendorId,

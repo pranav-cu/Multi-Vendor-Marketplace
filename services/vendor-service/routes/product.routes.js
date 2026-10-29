@@ -3,16 +3,21 @@ import {
     getMyProductsController,
     createProductController,
     updateProductController,
-    deleteProductController
+    deleteProductController,
+    uploadProductImagesController
 } from "../controllers/product.controller.js";
 import { authenticate, authorizeRoles } from "../middlewares/auth.js";
+import { uploadProductImages } from "../middlewares/upload.js";
 
 const router = Router();
 
-router.get("/my", authenticate, authorizeRoles("vendor"), getMyProductsController);
-router.patch("/:productId", authenticate, authorizeRoles("vendor"), updateProductController);
-router.delete("/:productId", authenticate, authorizeRoles("vendor"), deleteProductController);
-router.post("/", authenticate, authorizeRoles("vendor"), createProductController);
+router.use(authenticate, authorizeRoles("vendor"));
+
+router.get("/my", getMyProductsController);
+router.post("/upload-images", uploadProductImages.array("images", 10), uploadProductImagesController);
+router.patch("/:productId", updateProductController);
+router.delete("/:productId", deleteProductController);
+router.post("/", createProductController);
 
 export { router as productRouter };
 export default router;

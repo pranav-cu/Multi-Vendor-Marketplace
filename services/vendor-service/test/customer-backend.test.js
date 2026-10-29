@@ -1,6 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import jwt from "jsonwebtoken";
+import mongoose from "mongoose";
+
+test.after(async () => {
+    await mongoose.disconnect();
+});
 
 process.env.JWT_SECRET = "test-secret-that-is-at-least-32-characters-long";
 
@@ -42,6 +47,36 @@ test("customer authorization rejects a vendor role", () => {
         assert.fail("next should not run");
     });
     assert.equal(res.result.status, 403);
+});
+
+test("vendor store authorization rejects a customer role", () => {
+    const res = response();
+    authorizeRoles("vendor", "admin")({ user: { userId: 42, role: "customer" } }, res, () => {
+        assert.fail("next should not run");
+    });
+    assert.equal(res.result.status, 403);
+    assert.match(res.result.body.message, /Forbidden: Access requires one of/);
+});
+
+test("admin authorization strictly permits only admin role", () => {
+    const customerRes = response();
+    authorizeRoles("admin")({ user: { userId: 42, role: "customer" } }, customerRes, () => {
+        assert.fail("next should not run");
+    });
+    assert.equal(customerRes.result.status, 403);
+
+    const vendorRes = response();
+    authorizeRoles("admin")({ user: { userId: 7, role: "vendor" } }, vendorRes, () => {
+        assert.fail("next should not run");
+    });
+    assert.equal(vendorRes.result.status, 403);
+
+    const adminRes = response();
+    let nextCalled = false;
+    authorizeRoles("admin")({ user: { userId: 99, role: "admin" } }, adminRes, () => {
+        nextCalled = true;
+    });
+    assert.equal(nextCalled, true);
 });
 
 test("customer JWT identity is read from the verified token", () => {
@@ -119,33 +154,87 @@ test("saved address validation rejects protected fields and normalizes values", 
         country: "United Kingdom",
         label: " Home "
     });
-
-    test("vendor public serialization excludes private KYC and payout fields", () => {
-        const result = serializeVendorPublic({
-            userId: 7,
-            email: "vendor@example.com",
-            storeName: "Store",
-            slug: "store",
-            status: "approved",
-            uuid: "vendor-uuid",
-            kycDocs: ["private-document-path"],
-            payoutAccountId: "private-payout-id",
-            password: "private-password"
-        });
-        assert.deepEqual(result, {
-            userId: 7,
-            email: "vendor@example.com",
-            storeName: "Store",
-            slug: "store",
-            status: "approved",
-            uuid: "vendor-uuid",
-            createdAt: undefined,
-            updatedAt: undefined
-        });
-        assert.equal("kycDocs" in result, false);
-        assert.equal("payoutAccountId" in result, false);
-    });
     assert.equal(address.recipientName, "Buyer");
     assert.equal(address.label, "Home");
     assert.throws(() => validateAddress({ userId: 99 }), /recipientName is required/);
+});
+
+test("vendor public serialization excludes private KYC and payout fields", () => {
+    const result = serializeVendorPublic({
+        userId: 7,
+        email: "vendor@example.com",
+        storeName: "Store",
+        slug: "store",
+        status: "approved",
+        uuid: "vendor-uuid",
+        kycDocs: ["private-document-path"],
+        payoutAccountId: "private-payout-id",
+        password: "private-password"
+    });
+    assert.deepEqual(result, {
+        userId: 7,
+        email: "vendor@example.com",
+        storeName: "Store",
+        slug: "store",
+        status: "approved",
+        uuid: "vendor-uuid",
+        createdAt: undefined,
+        updatedAt: undefined
+    });
+    assert.equal("kycDocs" in result, false);
+    assert.equal("payoutAccountId" in result, false);
+});
+
+test("vendor self serialization includes commission, payoutAccountId, and KYC docs", async () => {
+    const { serializeVendorSelf } = await import("../utils/vendor.serialization.js");
+    const result = serializeVendorSelf({
+        userId: 7,
+        email: "vendor@example.com",
+        storeName: "Store",
+        slug: "store",
+        status: "approved",
+        uuid: "vendor-uuid",
+        commissionPct: 15,
+        payoutAccountId: "acct_test123",
+        kycDocs: ["kyc_passport.pdf"],
+        password: "hash-should-be-omitted"
+    });
+    assert.equal(result.commissionPct, 15);
+    assert.equal(result.payoutAccountId, "acct_test123");
+    assert.deepEqual(result.kycDocs, ["kyc_passport.pdf"]);
+    assert.equal("password" in result, false);
+});
+
+test("vendor order status update validates status and orderId", async () => {
+    const { updateVendorOrderStatus } = await import("../services/order.service.js");
+    await assert.rejects(
+        () => updateVendorOrderStatus(1001, "invalid-order-id", "processing"),
+        /Invalid order ID/
+    );
+    await assert.rejects(
+        () => updateVendorOrderStatus(1001, "ORD-00000000-0000-0000-0000-000000000000", "bogus_status"),
+        /Invalid status: bogus_status/
+    );
+});
+
+test("product images upload controller handles file uploads and missing file errors", async () => {
+    const { uploadProductImagesController } = await import("../controllers/product.controller.js");
+
+    const errorRes = response();
+    await uploadProductImagesController({ files: [] }, errorRes);
+    assert.equal(errorRes.result.status, 400);
+    assert.match(errorRes.result.body.message, /No image file was uploaded/);
+
+    const successRes = response();
+    await uploadProductImagesController({
+        files: [
+            { filename: "prod-vase-1.png" },
+            { filename: "prod-vase-2.webp" }
+        ]
+    }, successRes);
+    assert.equal(successRes.result.status, 200);
+    assert.deepEqual(successRes.result.body.data.images, [
+        "/uploads/products/prod-vase-1.png",
+        "/uploads/products/prod-vase-2.webp"
+    ]);
 });

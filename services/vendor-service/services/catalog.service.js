@@ -10,10 +10,11 @@ const toPublicProduct = (product, vendor) => ({
     description: product.description,
     price: product.price,
     stockQuantity: product.stockQuantity,
+    images: product.images || [],
     createdAt: product.createdAt,
     updatedAt: product.updatedAt,
     vendorId: product.vendorId,
-    storeName: vendor.storeName
+    storeName: vendor?.storeName || ""
 });
 
 const getCatalogProducts = async ({ page = 1, pageSize = DEFAULT_PAGE_SIZE, search = "" }) => {

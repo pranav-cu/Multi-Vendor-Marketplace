@@ -1,5 +1,5 @@
 import { getVendor, updateVendorProfile } from "../services/vendor-data.service.js";
-import { serializeVendorPublic } from "../utils/vendor.serialization.js";
+import { serializeVendorPublic, serializeVendorSelf } from "../utils/vendor.serialization.js";
 
 const vendorDataController = async (req, res) => {
     try {
@@ -27,9 +27,12 @@ const vendorDataController = async (req, res) => {
             });
         }
 
+        const isOwnerOrAdmin = req.user && (req.user.role === "admin" || Number(vendorData.userId) === Number(req.user.userId));
+        const payload = isOwnerOrAdmin ? serializeVendorSelf(vendorData) : serializeVendorPublic(vendorData);
+
         return res.status(200).json({
             message: "Vendor data fetched successfully",
-            data: serializeVendorPublic(vendorData)
+            data: payload
         });
     } catch (error) {
         console.error("Error in vendorDataController:", error);

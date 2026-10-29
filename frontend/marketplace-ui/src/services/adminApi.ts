@@ -1,14 +1,36 @@
 import type { Vendor } from '../types/marketplace';
+import { validateUserToken } from '../utils/customerAuthUtils.ts';
 
-const VENDOR_SERVICE_URL =
-  import.meta.env.VITE_VENDOR_SERVICE_URL ||
-  import.meta.env.VENDOR_SERVICE_URL ||
-  'http://localhost:3001';
+const resolveBaseUrl = (): string => {
+  let url: string | undefined;
+  try {
+    const metaEnv = (import.meta as unknown as { env?: Record<string, string> }).env;
+    if (metaEnv) {
+      url = metaEnv.VITE_VENDOR_SERVICE_URL || metaEnv.VENDOR_SERVICE_URL;
+    }
+  } catch {
+    // Environments without import.meta.env
+  }
+  if (!url) {
+    const globalProcess = (globalThis as unknown as { process?: { env?: Record<string, string | undefined> } }).process;
+    if (globalProcess?.env) {
+      url = globalProcess.env.VITE_VENDOR_SERVICE_URL || globalProcess.env.VENDOR_SERVICE_URL;
+    }
+  }
+  return (url || 'http://localhost:3001').replace(/\/+$/, '');
+};
+
+const VENDOR_SERVICE_URL = resolveBaseUrl();
 
 const getAuthHeaders = (): HeadersInit => {
   const token = localStorage.getItem('vendor_token');
   if (!token) {
     throw new Error('Please sign in with an administrator account.');
+  }
+
+  const validated = validateUserToken(token);
+  if (!validated || validated.role !== 'admin') {
+    throw new Error('Access denied: Administrator privileges required.');
   }
 
   return {
