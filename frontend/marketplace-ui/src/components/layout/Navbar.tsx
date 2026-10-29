@@ -9,6 +9,7 @@ import {
   XIcon,
 } from '../ui/Icons';
 import { useMarketplace } from '../../context/MarketplaceContext';
+import { useCustomer } from '../../context/useCustomer';
 
 export type MarketplaceView =
   | 'catalog'
@@ -17,7 +18,10 @@ export type MarketplaceView =
   | 'admin'
   | 'profile'
   | 'login'
-  | 'signup';
+  | 'signup'
+  | 'customer-auth'
+  | 'customer-orders'
+  | 'customer-profile';
 
 export interface NavbarProps {
   currentView?: MarketplaceView;
@@ -25,10 +29,15 @@ export interface NavbarProps {
 }
 
 export const Navbar: React.FC<NavbarProps> = ({ currentView = 'catalog', onNavigate }) => {
-  const { cartCount, currentUserEmail } = useMarketplace();
+  const { currentUserEmail } = useMarketplace();
+  const { isCustomerAuthenticated, customerUser, customerProfile, cartCount: customerCartCount } = useCustomer();
+
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  const cartBadgeCount = isCustomerAuthenticated ? customerCartCount : 0;
+  const customerLabel = customerProfile?.displayName || customerUser?.email || null;
 
   return (
     <header className="sticky top-0 z-50 w-full bg-[#fcfcfb] border-b border-neutral-200/80">
@@ -72,6 +81,26 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView = 'catalog', onNavig
                   />
                 )}
               </button>
+
+              {isCustomerAuthenticated && (
+                <button
+                  type="button"
+                  onClick={() => onNavigate('customer-orders')}
+                  className={`relative py-2 transition-colors duration-150 cursor-pointer ${
+                    currentView === 'customer-orders'
+                      ? 'text-neutral-900'
+                      : 'text-neutral-500 hover:text-neutral-900'
+                  }`}
+                >
+                  <span>MY ORDERS</span>
+                  {currentView === 'customer-orders' && (
+                    <span
+                      className="absolute bottom-0 left-0 w-full h-[2px] bg-neutral-900"
+                      aria-hidden="true"
+                    />
+                  )}
+                </button>
+              )}
 
               <button
                 type="button"
@@ -169,46 +198,67 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView = 'catalog', onNavig
               aria-label="Shopping bag"
             >
               <BagIcon className="w-4 h-4 sm:w-[18px] sm:h-[18px]" />
-              {cartCount > 0 && (
+              {cartBadgeCount > 0 && (
                 <span className="absolute -top-1 -right-1.5 w-4 h-4 bg-black text-white text-[9px] font-bold rounded-full flex items-center justify-center leading-none">
-                  {cartCount}
+                  {cartBadgeCount}
                 </span>
               )}
             </button>
 
-            {/* Profile Pic / Account (Shows Email if signed in) */}
-            <button
-              type="button"
-              onClick={() => onNavigate('profile')}
-              className={`flex items-center gap-2 pl-1 group cursor-pointer focus:outline-none transition-colors ${
-                currentView === 'profile' ? 'text-black' : 'text-neutral-800'
-              }`}
-              aria-label={currentUserEmail || 'Account Dossier'}
-              title={
-                currentUserEmail
-                  ? `Signed in as ${currentUserEmail} • Click for KYC & Profile`
-                  : 'Account & KYC Profile'
-              }
-            >
-              <div
-                className={`relative w-7 h-7 sm:w-8 sm:h-8 rounded-full overflow-hidden border transition-all ${
-                  currentView === 'profile'
-                    ? 'border-neutral-900 ring-2 ring-neutral-900/30'
-                    : 'border-neutral-300 bg-neutral-200 group-hover:border-neutral-900'
-                } flex items-center justify-center shadow-sm`}
+            {/* Account Selector */}
+            {isCustomerAuthenticated ? (
+              <button
+                type="button"
+                onClick={() => onNavigate('customer-profile')}
+                className={`flex items-center gap-2 pl-1 group cursor-pointer focus:outline-none transition-colors ${
+                  currentView === 'customer-profile' ? 'text-black' : 'text-neutral-800'
+                }`}
+                title={`Client: ${customerLabel} • Click for Dossier`}
               >
-                <UserAvatarGraphic />
-              </div>
-              {currentUserEmail ? (
-                <span className="hidden sm:inline text-[11px] font-medium tracking-normal lowercase text-neutral-800 group-hover:text-neutral-950 max-w-[130px] md:max-w-[180px] lg:max-w-[220px] truncate">
+                <div
+                  className={`relative w-7 h-7 sm:w-8 sm:h-8 rounded-full overflow-hidden border transition-all ${
+                    currentView === 'customer-profile'
+                      ? 'border-neutral-900 ring-2 ring-neutral-900/30'
+                      : 'border-neutral-300 bg-neutral-200 group-hover:border-neutral-900'
+                  } flex items-center justify-center shadow-sm`}
+                >
+                  <UserAvatarGraphic />
+                </div>
+                <span className="hidden sm:inline text-[11px] font-medium tracking-normal lowercase text-neutral-800 group-hover:text-neutral-950 max-w-[130px] md:max-w-[180px] truncate">
+                  {customerLabel}
+                </span>
+              </button>
+            ) : currentUserEmail ? (
+              <button
+                type="button"
+                onClick={() => onNavigate('profile')}
+                className={`flex items-center gap-2 pl-1 group cursor-pointer focus:outline-none transition-colors ${
+                  currentView === 'profile' ? 'text-black' : 'text-neutral-800'
+                }`}
+                title={`Vendor/Admin: ${currentUserEmail}`}
+              >
+                <div
+                  className={`relative w-7 h-7 sm:w-8 sm:h-8 rounded-full overflow-hidden border transition-all ${
+                    currentView === 'profile'
+                      ? 'border-neutral-900 ring-2 ring-neutral-900/30'
+                      : 'border-neutral-300 bg-neutral-200 group-hover:border-neutral-900'
+                  } flex items-center justify-center shadow-sm`}
+                >
+                  <UserAvatarGraphic />
+                </div>
+                <span className="hidden sm:inline text-[11px] font-medium tracking-normal lowercase text-neutral-800 group-hover:text-neutral-950 max-w-[130px] md:max-w-[180px] truncate">
                   {currentUserEmail}
                 </span>
-              ) : (
-                <span className="hidden sm:inline text-[11px] font-semibold tracking-[0.16em] uppercase group-hover:text-neutral-950">
-                  ACCOUNT
-                </span>
-              )}
-            </button>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => onNavigate('customer-auth')}
+                className="text-[11px] font-semibold tracking-[0.16em] uppercase text-neutral-800 hover:text-black py-1.5 px-3 border border-neutral-300 hover:border-black cursor-pointer transition-colors"
+              >
+                SIGN IN
+              </button>
+            )}
 
             {/* Mobile menu button */}
             <button
@@ -236,6 +286,18 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView = 'catalog', onNavig
             >
               CATALOG
             </button>
+            {isCustomerAuthenticated && (
+              <button
+                type="button"
+                onClick={() => {
+                  onNavigate('customer-orders');
+                  setIsMobileMenuOpen(false);
+                }}
+                className="text-left py-2 px-2 text-neutral-800 hover:bg-neutral-50"
+              >
+                MY ORDERS
+              </button>
+            )}
             <button
               type="button"
               onClick={() => {
@@ -259,68 +321,23 @@ export const Navbar: React.FC<NavbarProps> = ({ currentView = 'catalog', onNavig
             <button
               type="button"
               onClick={() => {
-                onNavigate('profile');
+                if (isCustomerAuthenticated) {
+                  onNavigate('customer-profile');
+                } else if (currentUserEmail) {
+                  onNavigate('profile');
+                } else {
+                  onNavigate('customer-auth');
+                }
                 setIsMobileMenuOpen(false);
               }}
-              className="text-left py-2 px-2 text-neutral-800 hover:bg-neutral-50 flex items-center justify-between"
+              className="text-left py-2 px-2 text-neutral-800 hover:bg-neutral-50"
             >
-              <div className="flex flex-col truncate pr-2">
-                {currentUserEmail ? (
-                  <>
-                    <span className="text-xs font-semibold lowercase tracking-normal text-neutral-900 truncate">
-                      {currentUserEmail}
-                    </span>
-                    <span className="text-[10px] uppercase tracking-wider text-[#9c784e]">
-                      KYC & PROFILE
-                    </span>
-                  </>
-                ) : (
-                  <span>ACCOUNT & KYC PROFILE</span>
-                )}
-              </div>
-              <div className="w-5 h-5 rounded-full overflow-hidden border border-neutral-300 shrink-0">
-                <UserAvatarGraphic />
-              </div>
+              {isCustomerAuthenticated
+                ? 'CUSTOMER DOSSIER'
+                : currentUserEmail
+                ? 'VENDOR PROFILE'
+                : 'SIGN IN'}
             </button>
-            <button
-              type="button"
-              onClick={() => {
-                onNavigate('cart');
-                setIsMobileMenuOpen(false);
-              }}
-              className="text-left py-2 px-2 text-neutral-800 hover:bg-neutral-50 flex items-center justify-between"
-            >
-              <span>SHOPPING BAG</span>
-              {cartCount > 0 && (
-                <span className="px-2 py-0.5 bg-black text-white text-[10px] rounded-full">
-                  {cartCount}
-                </span>
-              )}
-            </button>
-            {!currentUserEmail && (
-              <>
-                <button
-                  type="button"
-                  onClick={() => {
-                    onNavigate('signup');
-                    setIsMobileMenuOpen(false);
-                  }}
-                  className="text-left py-2 px-2 text-neutral-800 hover:bg-neutral-50"
-                >
-                  REQUEST MEMBERSHIP (SIGNUP)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    onNavigate('login');
-                    setIsMobileMenuOpen(false);
-                  }}
-                  className="text-left py-2 px-2 text-neutral-800 hover:bg-neutral-50"
-                >
-                  ACCESS VAULT (LOGIN)
-                </button>
-              </>
-            )}
           </nav>
         </div>
       )}

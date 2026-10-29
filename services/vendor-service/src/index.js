@@ -8,13 +8,19 @@ import routes from "../routes/index.js";
 
 const app = express();
 
-const corsOrigin = process.env.CORS_ORIGIN || (process.env.NODE_ENV === "production" ? false : "*");
+const configuredOrigin = process.env.CORS_ORIGIN;
+const originSetting = !configuredOrigin || configuredOrigin === "*" || configuredOrigin === "true"
+    ? true
+    : (configuredOrigin.includes(",") ? configuredOrigin.split(",").map(o => o.trim()) : configuredOrigin);
 
-app.use(cors({
-    origin: corsOrigin,
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"]
-}));
+const corsOptions = {
+    origin: originSetting,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
+    credentials: true,
+    optionsSuccessStatus: 200
+};
+
+app.use(cors(corsOptions));
 
 app.use(express.json());
 app.get("/health", (req, res) => {
